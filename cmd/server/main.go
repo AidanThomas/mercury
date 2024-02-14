@@ -5,28 +5,53 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 )
 
 var count = 0
 
-func handleConnection(c net.Conn) {
-	fmt.Print(".")
+func awaitConnection(l net.Listener, m chan string) {
+	c, err := l.Accept()
+	if err != nil {
+		panic(err)
+	}
+	go handleConnection(c, m)
+	count++
+	go awaitConnection(l, m)
+}
+
+func handleConnection(c net.Conn, m chan string) {
+	n := make(chan string)
+	go waitForMessage(c, n)
+	loop := true
+	for loop {
+		select {
+		case msg := <-n:
+			if msg == "STOP" {
+				loop = false
+				break
+			}
+			m <- msg
+			c.Write([]byte("SERVER\n"))
+		default:
+			continue
+		}
+	}
+	c.Close()
+}
+
+func waitForMessage(c net.Conn, n chan string) {
 	for {
 		netData, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil {
-			fmt.Println(err)
-			return
+			panic(err)
 		}
 
-		temp := strings.TrimSpace(string(netData))
-		if temp == "STOP" {
+		msg := strings.TrimSpace(string(netData))
+		if msg == "STOP" {
 			break
 		}
-		fmt.Println(temp)
-		counter := strconv.Itoa(count) + "\n"
-		c.Write([]byte(string(counter)))
+		n <- msg
 	}
 	c.Close()
 }
@@ -46,13 +71,15 @@ func main() {
 	}
 	defer l.Close()
 
+	m := make(chan string)
+	go awaitConnection(l, m)
+
 	for {
-		c, err := l.Accept()
-		if err != nil {
-			fmt.Println(err)
-			return
+		select {
+		case msg := <-m:
+			fmt.Println(msg)
+		default:
+			continue
 		}
-		go handleConnection(c)
-		count++
 	}
 }

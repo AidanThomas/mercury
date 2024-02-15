@@ -5,8 +5,28 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 )
+
+func waitForIncoming(c net.Conn, in chan string) {
+	for {
+		msg, _ := bufio.NewReader(c).ReadString('\n')
+		in <- msg
+		if msg == "STOP" {
+			break
+		}
+	}
+}
+
+func waitForOutgoing(c net.Conn, out chan string) {
+	for {
+		reader := bufio.NewReader(os.Stdin)
+		msg, _ := reader.ReadString('\n')
+		out <- msg
+		if msg == "STOP" {
+			break
+		}
+	}
+}
 
 func main() {
 	arguments := os.Args
@@ -22,17 +42,26 @@ func main() {
 		return
 	}
 
-	for {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print(">> ")
-		text, _ := reader.ReadString('\n')
-		fmt.Fprintf(c, text+"\n")
+	out := make(chan string)
+	in := make(chan string)
 
-		message, _ := bufio.NewReader(c).ReadString('\n')
-		fmt.Print("->: " + message)
-		if strings.TrimSpace(string(text)) == "STOP" {
-			fmt.Println(("TCP client exiting..."))
-			return
+	go waitForIncoming(c, in)
+	go waitForOutgoing(c, out)
+	loop := true
+
+	for loop {
+		select {
+		case msg := <-in:
+			fmt.Print(">> " + msg)
+		case msg := <-out:
+			if msg == "STOP" {
+				fmt.Println("TCP client exiting...")
+				close(in)
+				close(out)
+				loop = false
+				break
+			}
+			fmt.Fprintf(c, msg+"\n")
 		}
 	}
 }

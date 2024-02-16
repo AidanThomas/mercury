@@ -22,9 +22,6 @@ func waitForOutgoing(c net.Conn, out chan string) {
 		reader := bufio.NewReader(os.Stdin)
 		msg, _ := reader.ReadString('\n')
 		out <- msg
-		if msg == "STOP" {
-			break
-		}
 	}
 }
 
@@ -47,21 +44,20 @@ func main() {
 
 	go waitForIncoming(c, in)
 	go waitForOutgoing(c, out)
-	loop := true
+	active := true
 
-	for loop {
+	for active {
 		select {
 		case msg := <-in:
 			fmt.Print(">> " + msg)
 		case msg := <-out:
-			if msg == "STOP" {
+			if msg == "STOP\n" {
 				fmt.Println("TCP client exiting...")
-				close(in)
-				close(out)
-				loop = false
-				break
+				active = false
 			}
 			fmt.Fprintf(c, msg+"\n")
+		default:
+			continue
 		}
 	}
 }

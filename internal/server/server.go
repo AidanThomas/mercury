@@ -1,13 +1,14 @@
 package server
 
 import (
-	"bufio"
 	"fmt"
 	"net"
 	"strings"
 
 	"github.com/AidanThomas/mercury/internal/log"
 )
+
+var connections []*Connection
 
 func Start(port string) {
 	l, err := net.Listen("tcp", port)
@@ -48,20 +49,24 @@ func awaitConnection(l net.Listener, in, out chan string) {
 }
 
 func handleConnection(c net.Conn, in, out chan string) {
-	// Create a listener to wait for an incoming message
-	go waitForIncoming(c, in)
-	go waitForOutgoing(c, out)
+	conn := Connection{
+		Id:   uint(len(connections) + 1),
+		Conn: c,
+	}
+	connections = append(connections, &conn)
+	go waitForIncoming(conn, in)
+	go waitForOutgoing(conn, out)
 }
 
-func waitForIncoming(c net.Conn, in chan string) {
+func waitForIncoming(c Connection, in chan string) {
 	for {
-		netData, err := bufio.NewReader(c).ReadString('\n')
+		msg, err := c.GetMsg()
 		if err != nil {
 			log.Errorf(err.Error())
 			return
 		}
 
-		msg := strings.TrimSpace(string(netData))
+		msg = strings.TrimSpace(msg)
 		if msg == "STOP" {
 			break
 		}
@@ -70,9 +75,11 @@ func waitForIncoming(c net.Conn, in chan string) {
 	c.Close()
 }
 
-func waitForOutgoing(c net.Conn, out chan string) {
+func waitForOutgoing(c Connection, out chan string) {
 	for {
 		msg := <-out
-		c.Write([]byte(msg))
+		if err := c.Send(msg); err != nil {
+			log.Errorf(err.Error())
+		}
 	}
 }

@@ -17,8 +17,8 @@ func Start(port string) {
 	}
 	defer l.Close()
 
-	in := make(chan string)
-	out := make(chan string)
+	in := make(chan string)  // Incoming messages
+	out := make(chan string) // Outgoing messages
 
 	go awaitConnection(l, in, out)
 
@@ -26,6 +26,9 @@ func Start(port string) {
 		select {
 		case msg := <-in:
 			fmt.Println(msg)
+
+			// Respond
+			out <- "SERVER\n"
 		default:
 			continue
 		}
@@ -33,36 +36,24 @@ func Start(port string) {
 }
 
 func awaitConnection(l net.Listener, in, out chan string) {
-	c, err := l.Accept()
-	if err != nil {
-		log.Errorf(err.Error())
-		return
-	}
+	for {
+		c, err := l.Accept()
+		if err != nil {
+			log.Errorf(err.Error())
+			return
+		}
 
-	go handleConnection(c, in, out)
-	go awaitConnection(l, in, out)
+		go handleConnection(c, in, out)
+	}
 }
 
 func handleConnection(c net.Conn, in, out chan string) {
-	go waitForMessage(c, out)
-	loop := true
-	for loop {
-		select {
-		case msg := <-out:
-			if msg == "STOP" {
-				loop = false
-				break
-			}
-			in <- msg
-			c.Write([]byte("SERVER\n"))
-		default:
-			continue
-		}
-	}
-	c.Close()
+	// Create a listener to wait for an incoming message
+	go waitForIncoming(c, in)
+	go waitForOutgoing(c, out)
 }
 
-func waitForMessage(c net.Conn, out chan string) {
+func waitForIncoming(c net.Conn, in chan string) {
 	for {
 		netData, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil {
@@ -74,7 +65,14 @@ func waitForMessage(c net.Conn, out chan string) {
 		if msg == "STOP" {
 			break
 		}
-		out <- msg
+		in <- msg
 	}
 	c.Close()
+}
+
+func waitForOutgoing(c net.Conn, out chan string) {
+	for {
+		msg := <-out
+		c.Write([]byte(msg))
+	}
 }

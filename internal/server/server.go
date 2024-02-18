@@ -8,6 +8,11 @@ import (
 	"github.com/AidanThomas/mercury/internal/log"
 )
 
+type message struct {
+	body   string
+	connId uint
+}
+
 var connections []*Connection
 
 func Start(port string) {
@@ -18,37 +23,37 @@ func Start(port string) {
 	}
 	defer l.Close()
 
-	in := make(chan string)  // Incoming messages
-	out := make(chan string) // Outgoing messages
+	in := make(chan message)  // Incoming messages
+	out := make(chan message) // Outgoing messages
 
 	go awaitConnection(l, in, out)
 
 	for {
 		select {
 		case msg := <-in:
-			fmt.Println(msg)
-
+			log.Infof("[Id: %d]: %s", msg.connId, msg.body)
 			// Respond
-			out <- "SERVER\n"
+			out <- message{
+				body: "SERVER\n",
+			}
 		default:
 			continue
 		}
 	}
 }
 
-func awaitConnection(l net.Listener, in, out chan string) {
+func awaitConnection(l net.Listener, in, out chan message) {
 	for {
 		c, err := l.Accept()
 		if err != nil {
 			log.Errorf(err.Error())
-			return
 		}
 
 		go handleConnection(c, in, out)
 	}
 }
 
-func handleConnection(c net.Conn, in, out chan string) {
+func handleConnection(c net.Conn, in, out chan message) {
 	conn := Connection{
 		Id:   uint(len(connections) + 1),
 		Conn: c,
@@ -58,7 +63,7 @@ func handleConnection(c net.Conn, in, out chan string) {
 	go waitForOutgoing(conn, out)
 }
 
-func waitForIncoming(c Connection, in chan string) {
+func waitForIncoming(c Connection, in chan message) {
 	for {
 		msg, err := c.GetMsg()
 		if err != nil {
@@ -67,19 +72,19 @@ func waitForIncoming(c Connection, in chan string) {
 		}
 
 		msg = strings.TrimSpace(msg)
-		if msg == "STOP" {
-			break
+		in <- message{
+			body:   msg,
+			connId: c.Id,
 		}
-		in <- msg
 	}
-	c.Close()
 }
 
-func waitForOutgoing(c Connection, out chan string) {
+func waitForOutgoing(c Connection, out chan message) {
 	for {
 		msg := <-out
-		if err := c.Send(msg); err != nil {
+		if err := c.Send(msg.body); err != nil {
 			log.Errorf(err.Error())
+			return
 		}
 	}
 }

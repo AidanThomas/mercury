@@ -17,6 +17,7 @@ var (
 )
 
 func Errorf(format string, args ...interface{}) {
+	format = fmt.Sprintf("ERR: %s", format)
 	format = addTimeStamp(format)
 	stderr.Printf(format, args...)
 }
@@ -25,6 +26,7 @@ func Infof(format string, args ...interface{}) {
 	var level Level
 	level.Parse(os.Getenv("LOG_LEVEL"))
 	if level >= Info {
+		format = fmt.Sprintf("INFO: %s", format)
 		format = addTimeStamp(format)
 		stdout.Printf(format, args...)
 	}
@@ -34,6 +36,7 @@ func Debugf(format string, args ...interface{}) {
 	var level Level
 	level.Parse(os.Getenv("LOG_LEVEL"))
 	if level >= Debug {
+		format = fmt.Sprintf("DEBUG: %s", format)
 		format = addTimeStamp(format)
 		stdout.Printf(format, args...)
 	}

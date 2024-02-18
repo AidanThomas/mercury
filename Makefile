@@ -7,6 +7,7 @@ run: ## Run cli client locally
 .PHONY: run
 
 server: ## Run server locally
+	$(call setenv,debug)
 	@go run cmd/server/main.go 1234
 .PHONY: server
 
@@ -23,3 +24,8 @@ clean: ## Clean the project
 	@rm -rf bin
 	@go clean
 .PHONY: clean
+
+define setenv
+	$(eval include $1.env)
+	$(eval export)
+endef

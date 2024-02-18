@@ -14,6 +14,7 @@ import (
 type message struct {
 	body   string
 	connId string
+	user   string
 }
 
 var (
@@ -42,7 +43,7 @@ func Start(port string) {
 	for {
 		select {
 		case msg := <-in:
-			log.Infof("[Id: %s]: %s", msg.connId, msg.body)
+			log.Infof("[%s]: %s", msg.user, msg.body)
 			// Respond
 			out <- message{
 				body: "SERVER\n",
@@ -75,6 +76,16 @@ func handleConnection(c net.Conn, in, out chan message) {
 		Id:   id,
 		Conn: c,
 	}
+	// USERNAME handshake
+	conn.Send("USERNAME\n")
+	user, err := conn.GetMsg()
+	if err != nil {
+		log.Errorf(err.Error())
+		return
+	}
+	conn.User = strings.TrimSpace(user)
+	log.Infof("Client { Id: %s, User: %s } connected from %s", conn.Id, conn.User, conn.Conn.RemoteAddr().String())
+
 	connections = append(connections, &conn)
 	go waitForIncoming(conn, in)
 	go waitForOutgoing(conn, out)
@@ -92,6 +103,7 @@ func waitForIncoming(c Connection, in chan message) {
 		in <- message{
 			body:   msg,
 			connId: c.Id,
+			user:   c.User,
 		}
 	}
 }

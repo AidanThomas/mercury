@@ -8,6 +8,7 @@ import (
 type Connection struct {
 	Id   string
 	Conn net.Conn
+	User string
 }
 
 func (c *Connection) Send(msg string) error {

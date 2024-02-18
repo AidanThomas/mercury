@@ -9,11 +9,12 @@ import (
 
 func main() {
 	arguments := os.Args
-	if len(arguments) == 1 {
-		log.Errorf("Please provide host:port")
+	if len(arguments) != 3 {
+		log.Errorf("Use like mercury <host:port> <username>")
 		return
 	}
 
 	CONNECT := arguments[1]
-	client.Start(CONNECT)
+	USER := arguments[2]
+	client.Start(CONNECT, USER)
 }

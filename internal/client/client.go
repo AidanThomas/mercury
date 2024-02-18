@@ -9,12 +9,24 @@ import (
 	"github.com/AidanThomas/mercury/internal/log"
 )
 
-func Start(addr string) {
+func Start(addr string, user string) {
 	c, err := net.Dial("tcp", addr)
 	if err != nil {
 		log.Errorf(err.Error())
 		return
 	}
+
+	// Username handshake
+	msg, err := bufio.NewReader(c).ReadString('\n')
+	if err != nil {
+		log.Errorf(err.Error())
+		return
+	}
+	if msg != "USERNAME\n" {
+		log.Errorf("Unexpected handshake, expected USERNAME, got: %s", msg)
+		return
+	}
+	fmt.Fprintf(c, user+"\n")
 
 	out := make(chan string)
 	in := make(chan string)

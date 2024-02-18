@@ -3,7 +3,11 @@ help:
 .PHONY: help
 
 run: ## Run cli client locally
-	@go run cmd/cli/main.go 127.0.0.1:1234
+	@go run cmd/cli/main.go 127.0.0.1:1234 testuser
+.PHONY: run
+
+run2:
+	@go run cmd/cli/main.go 127.0.0.1:1234 testuser2
 .PHONY: run
 
 server: ## Run server locally

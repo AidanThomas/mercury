@@ -3,17 +3,23 @@ package server
 import (
 	"fmt"
 	"net"
+	"os"
+	"strconv"
 	"strings"
 
+	"github.com/AidanThomas/mercury/internal/encoding"
 	"github.com/AidanThomas/mercury/internal/log"
 )
 
 type message struct {
 	body   string
-	connId uint
+	connId string
 }
 
-var connections []*Connection
+var (
+	connections []*Connection
+	encoder     encoding.Encoder
+)
 
 func Start(port string) {
 	l, err := net.Listen("tcp", port)
@@ -23,6 +29,11 @@ func Start(port string) {
 	}
 	defer l.Close()
 
+	// Create new encoder
+	salt := os.Getenv("ENCODING_SALT")
+	minLength, err := strconv.Atoi(os.Getenv("ENCODING_MIN_LENGTH"))
+	encoder = *encoding.NewEncoder(salt, minLength)
+
 	in := make(chan message)  // Incoming messages
 	out := make(chan message) // Outgoing messages
 
@@ -31,7 +42,7 @@ func Start(port string) {
 	for {
 		select {
 		case msg := <-in:
-			log.Infof("[Id: %d]: %s", msg.connId, msg.body)
+			log.Infof("[Id: %s]: %s", msg.connId, msg.body)
 			// Respond
 			out <- message{
 				body: "SERVER\n",
@@ -54,8 +65,14 @@ func awaitConnection(l net.Listener, in, out chan message) {
 }
 
 func handleConnection(c net.Conn, in, out chan message) {
+	id, err := encoder.GenerateNewId()
+	if err != nil {
+		log.Errorf(err.Error())
+		return
+	}
+
 	conn := Connection{
-		Id:   uint(len(connections) + 1),
+		Id:   id,
 		Conn: c,
 	}
 	connections = append(connections, &conn)

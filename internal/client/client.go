@@ -2,14 +2,26 @@ package client
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/AidanThomas/mercury/internal/log"
+	"github.com/AidanThomas/mercury/internal/message"
 )
 
-func Start(addr string, user string) {
+type Message message.Message
+
+var (
+	user string
+	id   string
+)
+
+func Start(addr string, usr string) {
+	user = usr
+
 	c, err := net.Dial("tcp", addr)
 	if err != nil {
 		log.Errorf(err.Error())
@@ -17,19 +29,41 @@ func Start(addr string, user string) {
 	}
 
 	// Username handshake
-	msg, err := bufio.NewReader(c).ReadString('\n')
+	jMsg, err := bufio.NewReader(c).ReadString('\n')
 	if err != nil {
 		log.Errorf(err.Error())
 		return
 	}
-	if msg != "USERNAME\n" {
-		log.Errorf("Unexpected handshake, expected USERNAME, got: %s", msg)
+	var req Message
+	if err := json.Unmarshal([]byte(jMsg), &req); err != nil {
+		log.Errorf(err.Error())
 		return
 	}
-	fmt.Fprintf(c, user+"\n")
+	if req.Body != "USERNAME\n" {
+		log.Errorf("Unexpected handshake, expected USERNAME, got: %s", req.Body)
+		return
+	}
+	res, err := json.Marshal(Message{
+		Body: user,
+		User: user,
+	})
+	if err != nil {
+		log.Errorf(err.Error())
+	}
+	Send(c, string(res))
+	jMsg, err = bufio.NewReader(c).ReadString('\n')
+	if err != nil {
+		log.Errorf(err.Error())
+		return
+	}
+	var confirm Message
+	if err = json.Unmarshal([]byte(jMsg), &confirm); err != nil {
+		log.Errorf(err.Error())
+	}
+	id = strings.TrimSpace(confirm.ConnId)
 
-	out := make(chan string)
-	in := make(chan string)
+	out := make(chan Message)
+	in := make(chan Message)
 
 	go waitForIncoming(c, in)
 	go waitForOutgoing(c, out)
@@ -38,32 +72,55 @@ func Start(addr string, user string) {
 	for active {
 		select {
 		case msg := <-in:
-			fmt.Print(">> " + msg)
+			fmt.Print(">> " + msg.Body)
 		case msg := <-out:
-			if msg == "STOP\n" {
+			if msg.Body == "STOP\n" {
 				fmt.Println("TCP client exiting...")
 				active = false
 			}
-			fmt.Fprintf(c, msg+"\n")
+			jMsg, err := json.Marshal(msg)
+			if err != nil {
+				log.Errorf(err.Error())
+				return
+			}
+			Send(c, string(jMsg))
 		}
 	}
 }
 
-func waitForIncoming(c net.Conn, in chan string) {
+func waitForIncoming(c net.Conn, in chan Message) {
 	for {
-		msg, _ := bufio.NewReader(c).ReadString('\n')
+		data, _ := bufio.NewReader(c).ReadString('\n')
+		var msg Message
+		if err := json.Unmarshal([]byte(data), &msg); err != nil {
+			log.Errorf(err.Error())
+			return
+		}
 		in <- msg
 	}
 }
 
-func waitForOutgoing(c net.Conn, out chan string) {
+func waitForOutgoing(c net.Conn, out chan Message) {
 	for {
 		reader := bufio.NewReader(os.Stdin)
-		msg, err := reader.ReadString('\n')
+		body, err := reader.ReadString('\n')
+		body = strings.TrimSpace(body)
 		if err != nil {
 			log.Errorf(err.Error())
 			return
 		}
-		out <- msg
+		out <- Message{
+			Body:   body,
+			ConnId: id,
+			User:   user,
+		}
 	}
+}
+
+func Send(c net.Conn, msg string) error {
+	_, err := c.Write([]byte(msg + "\n"))
+	if err != nil {
+		return err
+	}
+	return nil
 }

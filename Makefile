@@ -3,10 +3,12 @@ help:
 .PHONY: help
 
 run: ## Run cli client locally
+	$(call setenv,debug)
 	@go run cmd/cli/main.go 127.0.0.1:1234 testuser
 .PHONY: run
 
 run2:
+	$(call setenv,debug)
 	@go run cmd/cli/main.go 127.0.0.1:1234 testuser2
 .PHONY: run
 

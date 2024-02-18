@@ -72,7 +72,7 @@ func Start(addr string, usr string) {
 	for active {
 		select {
 		case msg := <-in:
-			fmt.Print(">> " + msg.Body)
+			fmt.Print(">> " + msg.Body + "\n")
 		case msg := <-out:
 			if msg.Body == "STOP\n" {
 				fmt.Println("TCP client exiting...")

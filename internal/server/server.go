@@ -73,8 +73,9 @@ func handleConnection(c net.Conn, in, out chan message) {
 	}
 
 	conn := Connection{
-		Id:   id,
-		Conn: c,
+		Active: true,
+		Id:     id,
+		Conn:   c,
 	}
 	// USERNAME handshake
 	conn.Send("USERNAME\n")
@@ -87,14 +88,18 @@ func handleConnection(c net.Conn, in, out chan message) {
 	log.Infof("Client { Id: %s, User: %s } connected from %s", conn.Id, conn.User, conn.Conn.RemoteAddr().String())
 
 	connections = append(connections, &conn)
-	go waitForIncoming(conn, in)
-	go waitForOutgoing(conn, out)
+	go waitForIncoming(&conn, in)
+	go waitForOutgoing(&conn, out)
 }
 
-func waitForIncoming(c Connection, in chan message) {
+func waitForIncoming(c *Connection, in chan message) {
 	for {
 		msg, err := c.GetMsg()
 		if err != nil {
+			if err.Error() == "EOF" {
+				disconnectClient(c)
+				return
+			}
 			log.Errorf(err.Error())
 			return
 		}
@@ -108,12 +113,28 @@ func waitForIncoming(c Connection, in chan message) {
 	}
 }
 
-func waitForOutgoing(c Connection, out chan message) {
+func waitForOutgoing(c *Connection, out chan message) {
 	for {
 		msg := <-out
+		if !c.Active {
+			return
+		}
 		if err := c.Send(msg.body); err != nil {
 			log.Errorf(err.Error())
 			return
 		}
 	}
+}
+
+func disconnectClient(c *Connection) {
+	c.Close()
+	var index = 1
+	for i, conn := range connections {
+		if c.Id == conn.Id {
+			index = i
+			break
+		}
+	}
+	connections = append(connections[:index], connections[index+1:]...)
+	log.Infof("Client { Id: %s, User: %s } disconnected", c.Id, c.User)
 }

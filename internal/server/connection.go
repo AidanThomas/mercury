@@ -6,9 +6,10 @@ import (
 )
 
 type Connection struct {
-	Id   string
-	Conn net.Conn
-	User string
+	Active bool
+	Id     string
+	Conn   net.Conn
+	User   string
 }
 
 func (c *Connection) Send(msg string) error {
@@ -25,4 +26,5 @@ func (c *Connection) GetMsg() (string, error) {
 
 func (c *Connection) Close() {
 	c.Conn.Close()
+	c.Active = false
 }

@@ -13,7 +13,7 @@ type Connection struct {
 }
 
 func (c *Connection) Send(msg string) error {
-	_, err := c.Conn.Write([]byte(msg))
+	_, err := c.Conn.Write([]byte(msg + "\n"))
 	if err != nil {
 		return err
 	}

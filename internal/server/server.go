@@ -38,34 +38,33 @@ func Start(port string) {
 	in := make(chan message)  // Incoming messages
 	out := make(chan message) // Outgoing messages
 
-	go awaitConnection(l, in, out)
+	go awaitConnection(l, in)
+	go waitForOutgoing(out)
 
 	for {
 		select {
 		case msg := <-in:
 			log.Infof("[%s]: %s", msg.user, msg.body)
 			// Respond
-			out <- message{
-				body: "SERVER\n",
-			}
+			out <- msg
 		default:
 			continue
 		}
 	}
 }
 
-func awaitConnection(l net.Listener, in, out chan message) {
+func awaitConnection(l net.Listener, in chan message) {
 	for {
 		c, err := l.Accept()
 		if err != nil {
 			log.Errorf(err.Error())
 		}
 
-		go handleConnection(c, in, out)
+		go handleConnection(c, in)
 	}
 }
 
-func handleConnection(c net.Conn, in, out chan message) {
+func handleConnection(c net.Conn, in chan message) {
 	id, err := encoder.GenerateNewId()
 	if err != nil {
 		log.Errorf(err.Error())
@@ -89,7 +88,6 @@ func handleConnection(c net.Conn, in, out chan message) {
 
 	connections = append(connections, &conn)
 	go waitForIncoming(&conn, in)
-	go waitForOutgoing(&conn, out)
 }
 
 func waitForIncoming(c *Connection, in chan message) {
@@ -113,15 +111,18 @@ func waitForIncoming(c *Connection, in chan message) {
 	}
 }
 
-func waitForOutgoing(c *Connection, out chan message) {
+func waitForOutgoing(out chan message) {
 	for {
 		msg := <-out
-		if !c.Active {
-			return
-		}
-		if err := c.Send(msg.body); err != nil {
-			log.Errorf(err.Error())
-			return
+		for _, c := range connections {
+			if msg.connId == c.Id {
+				continue
+			}
+
+			if err := c.Send(msg.body); err != nil {
+				log.Errorf(err.Error())
+			}
+			log.Debugf("Sent { %s } to { Id: %s, User: %s }", msg.body, c.Id, c.User)
 		}
 	}
 }

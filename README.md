@@ -1,1 +1,1 @@
-Mercury is an IRC client and server written in Go.
+Mercury is an instant messaging client and server written in Go.

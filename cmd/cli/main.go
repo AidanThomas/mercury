@@ -5,6 +5,7 @@ import (
 
 	"github.com/AidanThomas/mercury/internal/client"
 	"github.com/AidanThomas/mercury/internal/log"
+	"github.com/AidanThomas/mercury/internal/ui"
 )
 
 func main() {
@@ -16,5 +17,6 @@ func main() {
 
 	CONNECT := arguments[1]
 	USER := arguments[2]
+	ui.Start()
 	client.Start(CONNECT, USER)
 }

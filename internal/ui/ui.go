@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/AidanThomas/mercury/internal/message"
@@ -16,23 +17,21 @@ type colours struct {
 
 var (
 	messages []message.Message
-	users    []string
 )
 
-func Start() {
-	defaultColours := colours{
-		bg: tcell.ColorNone,
-		fg: tcell.ColorWhite,
-	}
+func Start() error {
+	app := tview.NewApplication()
 
 	out := make(chan string)
 
-	app := tview.NewApplication()
+	defaultTheme := colours{
+		bg: tcell.ColorNone,
+		fg: tcell.ColorNone,
+	}
 
-	// Create components
-	msgView := NewMessageView(defaultColours)
-	msgInput := NewMessageInput(defaultColours, out)
-	usrList := NewUserList(defaultColours)
+	msgInput := newMessageInput(defaultTheme, out)
+	msgView := newMessageView(defaultTheme)
+	usrList := newUserList(defaultTheme)
 
 	messageFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(msgView, 0, 1, false).
@@ -41,49 +40,54 @@ func Start() {
 		AddItem(messageFlex, 0, 1, true).
 		AddItem(usrList, 40, 1, false)
 
-	mainFlex.SetBackgroundColor(defaultColours.bg)
-	messageFlex.SetBackgroundColor(defaultColours.bg)
+	mainFlex.SetBackgroundColor(defaultTheme.bg)
+	messageFlex.SetBackgroundColor(defaultTheme.bg)
 
 	go waitForOutgoing(out, msgView)
 
 	app.SetRoot(mainFlex, true)
 	if err := app.Run(); err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }
 
-func NewMessageInput(col colours, out chan string) *tview.TextArea {
+func newMessageInput(theme colours, out chan string) *tview.TextArea {
 	input := tview.NewTextArea()
 	input.SetPlaceholder("Send a message...")
-	input.SetPlaceholderStyle(tcell.StyleDefault.Foreground(col.bg))
-	input.SetTextStyle(tcell.StyleDefault.Background(col.bg))
+	input.SetPlaceholderStyle(tcell.StyleDefault.Foreground(theme.bg))
+	input.SetTextStyle(tcell.StyleDefault.Background(theme.bg))
 	input.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEnter {
+		switch event.Key() {
+		case tcell.KeyEnter:
 			out <- fmt.Sprintf(" > %s", input.GetText())
-			input.SetText("", true)
-			// Clear event to not send newline
-			event = tcell.NewEventKey(tcell.KeyBackspace, 'a', tcell.ModNone)
+			input.SetText("", false)
+			return nil
+		case tcell.KeyCtrlC:
+			out <- "Control C"
+			input.SetText("", false)
+			return nil
 		}
 		return event
 	})
 	input.SetBorder(true)
-	input.SetBackgroundColor(col.bg)
+	input.SetBackgroundColor(theme.bg)
 	return input
 }
 
-func NewMessageView(col colours) *tview.TextView {
+func newMessageView(theme colours) *tview.TextView {
 	msgView := tview.NewTextView()
-	msgView.SetScrollable(true)
+	msgView.SetScrollable(false)
 	msgView.SetTextAlign(tview.AlignLeft)
-	msgView.SetBackgroundColor(col.bg)
+	msgView.SetBackgroundColor(theme.bg)
 	msgView.SetTitle("Messages").SetTitleAlign(tview.AlignLeft)
 	msgView.SetBorder(true)
 	return msgView
 }
 
-func NewUserList(col colours) *tview.TextView {
+func newUserList(theme colours) *tview.TextView {
 	usrList := tview.NewTextView()
-	usrList.SetBackgroundColor(col.bg)
+	usrList.SetBackgroundColor(theme.bg)
 	usrList.SetTitle("Connected Users").SetTitleAlign(tview.AlignLeft)
 	usrList.SetBorder(true)
 	return usrList
@@ -92,11 +96,23 @@ func NewUserList(col colours) *tview.TextView {
 func waitForOutgoing(out chan string, msgView *tview.TextView) {
 	for {
 		msg := <-out
+
 		messages = append(messages, message.Message{Body: msg})
+		_, _, _, height := msgView.GetInnerRect()
+		diff := height - len(messages)
 		var msgs []string
-		for i := len(messages) - 1; i >= 0; i-- {
-			msgs = append(msgs, messages[i].Body)
+		if diff > 0 {
+			for i := 0; i < diff; i++ {
+				msgs = append(msgs, "")
+			}
 		}
-		msgView.SetText(strings.Join(msgs, "\n"))
+		for _, msg := range messages {
+			msgs = append(msgs, msg.Body)
+		}
+		renderMessages(msgs, msgView)
 	}
+}
+
+func renderMessages(msgs []string, msgView *tview.TextView) {
+	msgView.SetText(strings.Join(msgs, "\n"))
 }

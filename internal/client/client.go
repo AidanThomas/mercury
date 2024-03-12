@@ -10,6 +10,7 @@ import (
 
 	"github.com/AidanThomas/mercury/internal/log"
 	"github.com/AidanThomas/mercury/internal/message"
+	"github.com/AidanThomas/mercury/internal/ui"
 )
 
 type Message message.Message
@@ -20,6 +21,12 @@ var (
 )
 
 func Start(addr string, usr string) {
+	// Create the ui
+	ui.Start()
+	if err := ui.Start(); err != nil {
+		panic(err)
+	}
+
 	user = usr
 
 	c, err := net.Dial("tcp", addr)
@@ -66,7 +73,7 @@ func Start(addr string, usr string) {
 	in := make(chan Message)
 
 	go waitForIncoming(c, in)
-	go waitForOutgoing(c, out)
+	go waitForOutgoing(out)
 	active := true
 
 	for active {
@@ -100,7 +107,7 @@ func waitForIncoming(c net.Conn, in chan Message) {
 	}
 }
 
-func waitForOutgoing(c net.Conn, out chan Message) {
+func waitForOutgoing(out chan Message) {
 	for {
 		reader := bufio.NewReader(os.Stdin)
 		body, err := reader.ReadString('\n')
